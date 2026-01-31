@@ -68,13 +68,38 @@ Data files are located in the `data/` directory:
 - `words-3000.js` - Three Bee words
 - `roots-data.js` - Roots and patterns library
 
+## Quick Start
+
+**The website is ready to use right now!**
+
+Simply open `index.html` in your browser, or follow the deployment instructions below to publish online.
+
+### Current Status
+
+✅ **Fully functional website** with all features
+✅ **60 sample words** (20 from each bee level) for testing
+✅ **All 5 study modes** working
+✅ **Dual filtering system** implemented
+✅ **Progress tracking** with localStorage
+✅ **Responsive design** for mobile and desktop
+
+⏳ **3,940 additional words** can be added incrementally (see WORD_EXTRACTION.md)
+
 ## Deployment
 
-Deploy to GitHub Pages by:
-1. Creating a new repository
-2. Pushing all files
-3. Enabling GitHub Pages in repository settings
-4. Accessing the site at: `https://emilystat.github.io/[repo-name]/`
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for step-by-step instructions to:
+1. Create a GitHub repository
+2. Push your code
+3. Enable GitHub Pages
+4. Access your site at: `https://emilystat.github.io/molly-words-of-champions/`
+
+## Adding More Words
+
+See **[WORD_EXTRACTION.md](WORD_EXTRACTION.md)** for strategies to add more words from the PDF:
+- Manual extraction guide
+- Recommended incremental approach
+- Quality checklist
+- File formats and testing instructions
 
 ## Credits
 
