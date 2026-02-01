@@ -104,6 +104,36 @@
                 <button class="action-btn" onclick="cancelQuizOptions()">Cancel</button>
             </div>
 
+            <!-- Review Difficult Words Options Selection -->
+            <div class="review-options-selection" id="reviewOptionsSelection" style="display: none;">
+                <h3>Review Difficult Words - Choose Options</h3>
+                <p class="review-progress-info" id="reviewProgressInfo" style="text-align: center; color: #666; margin-bottom: 15px;"></p>
+
+                <div class="quiz-option-group">
+                    <label>Filter by Word List:</label>
+                    <select id="reviewWordListFilter">
+                        <option value="all">All Difficult Words</option>
+                        <option value="1000">One Bee Only</option>
+                        <option value="2000">Two Bee Only</option>
+                        <option value="3000">Three Bee Only</option>
+                    </select>
+                </div>
+
+                <div class="quiz-option-group">
+                    <label>Group Size:</label>
+                    <select id="reviewGroupSize">
+                        <option value="5">5 words</option>
+                        <option value="10">10 words</option>
+                        <option value="20">20 words</option>
+                        <option value="all">All words at once</option>
+                    </select>
+                </div>
+
+                <button class="action-btn primary" onclick="startReviewWithOptions()">Start Review →</button>
+                <button class="action-btn" onclick="resetReviewProgress()" style="margin-right: 10px;">🔄 Start from Beginning</button>
+                <button class="action-btn" onclick="cancelReviewOptions()">Cancel</button>
+            </div>
+
             <!-- Progress Overview -->
             <div class="progress-overview">
                 <h3>Your Progress</h3>

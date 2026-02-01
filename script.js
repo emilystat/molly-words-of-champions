@@ -18,6 +18,10 @@ let testIndex = 0;
 let testScore = 0;
 let missedWords = [];
 let studyOffset = 0; // Track position in filtered words for sequential study groups
+let reviewOffset = 0; // Track position in difficult words for review mode
+let reviewGroupSize = 10; // Default review group size
+let reviewGroup = []; // Current group of difficult words being reviewed
+let reviewPhase = 'learn'; // 'learn' or 'test'
 let answerSubmitted = false; // Track if answer has been submitted (for Enter key handling)
 
 // Progress Data (stored in localStorage)
@@ -28,6 +32,12 @@ let progressData = {
     rootsStudied: {}, // {root: {attempts: 0, correct: 0, lastStudied: timestamp}}
     difficultRoots: [], // [root1, root2, ...] - roots marked as difficult
     studyOffsets: {   // Track progress through each word list
+        'all': 0,
+        '1000': 0,
+        '2000': 0,
+        '3000': 0
+    },
+    reviewOffsets: {  // Track progress through difficult words review by word list
         'all': 0,
         '1000': 0,
         '2000': 0,
@@ -53,6 +63,12 @@ document.addEventListener('DOMContentLoaded', function() {
     organizeRoots();
     updateFilters();
     updateProgressStats();
+
+    // Add event listener for review word list filter
+    const reviewFilterSelect = document.getElementById('reviewWordListFilter');
+    if (reviewFilterSelect) {
+        reviewFilterSelect.addEventListener('change', updateReviewProgressInfo);
+    }
 });
 
 // Combine all word datasets
@@ -155,6 +171,7 @@ function exitMode() {
 
     // Reset study offset when exiting any mode
     studyOffset = 0;
+    reviewOffset = 0;
 
     // Hide all mode interfaces
     document.getElementById('wordCard').style.display = 'none';
@@ -162,6 +179,7 @@ function exitMode() {
     document.getElementById('rootsBrowser').style.display = 'none';
     document.getElementById('groupSizeSelection').style.display = 'none';
     document.getElementById('quizOptionsSelection').style.display = 'none';
+    document.getElementById('reviewOptionsSelection').style.display = 'none';
 
     // Show mode selection
     document.getElementById('modeSelection').style.display = 'block';
@@ -651,7 +669,8 @@ function startLearnPhase() {
 }
 
 function showFlashcard() {
-    currentWord = studyGroup[flashcardIndex];
+    const group = currentMode === 'review' ? reviewGroup : studyGroup;
+    currentWord = group[flashcardIndex];
     isFlipped = false;
 
     document.getElementById('flashcardNumber').textContent = flashcardIndex + 1;
@@ -666,7 +685,7 @@ function showFlashcard() {
     // Update navigation buttons
     document.getElementById('prevCardBtn').disabled = flashcardIndex === 0;
 
-    if (flashcardIndex === studyGroup.length - 1) {
+    if (flashcardIndex === group.length - 1) {
         document.getElementById('nextCardBtn').style.display = 'none';
         document.getElementById('startTestBtn').style.display = 'inline-block';
     } else {
@@ -700,18 +719,33 @@ function speakCurrentWord(event) {
 function previousCard() {
     if (flashcardIndex > 0) {
         flashcardIndex--;
-        showFlashcard();
+        if (currentMode === 'review') {
+            showReviewFlashcard();
+        } else {
+            showFlashcard();
+        }
     }
 }
 
 function nextCard() {
-    if (flashcardIndex < studyGroup.length - 1) {
+    const group = currentMode === 'review' ? reviewGroup : studyGroup;
+    if (flashcardIndex < group.length - 1) {
         flashcardIndex++;
-        showFlashcard();
+        if (currentMode === 'review') {
+            showReviewFlashcard();
+        } else {
+            showFlashcard();
+        }
     }
 }
 
 function startTestPhase() {
+    // Check if we're in review mode or study mode
+    if (currentMode === 'review') {
+        startReviewTestPhase();
+        return;
+    }
+
     studyPhase = 'test';
     document.getElementById('learnPhase').style.display = 'none';
     document.getElementById('testPhase').style.display = 'block';
@@ -762,6 +796,7 @@ function submitTestAnswer() {
     // Prevent double submission
     if (answerSubmitted) return;
 
+    const group = currentMode === 'review' ? reviewGroup : studyGroup;
     const userAnswer = document.getElementById('testInput').value.trim().toLowerCase();
     const correctAnswer = currentWord.word.toLowerCase();
 
@@ -788,7 +823,7 @@ function submitTestAnswer() {
     document.getElementById('testScore').textContent = testScore;
 
     // Show next button
-    if (testIndex < studyGroup.length - 1) {
+    if (testIndex < group.length - 1) {
         document.getElementById('nextTestBtn').style.display = 'inline-block';
     } else {
         document.getElementById('finishTestBtn').style.display = 'inline-block';
@@ -797,12 +832,13 @@ function submitTestAnswer() {
 
 function checkTestEnter(event) {
     if (event.key === 'Enter') {
+        const group = currentMode === 'review' ? reviewGroup : studyGroup;
         if (!answerSubmitted) {
             // First Enter press - submit the answer
             submitTestAnswer();
         } else {
             // Second Enter press - advance to next word or finish
-            if (testIndex < studyGroup.length - 1) {
+            if (testIndex < group.length - 1) {
                 nextTestWord();
             } else {
                 finishStudyGroup();
@@ -830,11 +866,19 @@ function markTestWordDifficult() {
 
 function nextTestWord() {
     testIndex++;
-    showTestWord();
+    if (currentMode === 'review') {
+        showReviewTestWord();
+    } else {
+        showTestWord();
+    }
 }
 
 function finishStudyGroup() {
-    showStudyResults();
+    if (currentMode === 'review') {
+        showReviewResults();
+    } else {
+        showStudyResults();
+    }
 }
 
 function showStudyResults() {
@@ -878,33 +922,52 @@ function reviewMissed() {
     }
 
     // Restart with only missed words
-    studyGroup = [...missedWords];
-    flashcardIndex = 0;
-    testIndex = 0;
-    testScore = 0;
-    missedWords = [];
-
-    startLearnPhase();
+    if (currentMode === 'review') {
+        reviewGroup = [...missedWords];
+        flashcardIndex = 0;
+        testIndex = 0;
+        testScore = 0;
+        missedWords = [];
+        startReviewLearnPhase();
+    } else {
+        studyGroup = [...missedWords];
+        flashcardIndex = 0;
+        testIndex = 0;
+        testScore = 0;
+        missedWords = [];
+        startLearnPhase();
+    }
 }
 
 function continueNextGroup() {
-    // Move to next group of words with same group size
-    studyOffset += studyGroupSize;
+    if (currentMode === 'review') {
+        continueReviewNextGroup();
+    } else {
+        // Move to next group of words with same group size
+        studyOffset += studyGroupSize;
 
-    // Save the updated offset for the current word list
-    const wordListFilter = document.getElementById('wordListFilter').value;
-    progressData.studyOffsets[wordListFilter] = studyOffset;
-    saveProgressData();
+        // Save the updated offset for the current word list
+        const wordListFilter = document.getElementById('wordListFilter').value;
+        progressData.studyOffsets[wordListFilter] = studyOffset;
+        saveProgressData();
 
-    startStudyMode();
+        startStudyMode();
+    }
 }
 
 function chooseNewGroupSize() {
     // Hide study card and show group size selection again
     document.getElementById('studyCard').style.display = 'none';
     document.getElementById('modeSelection').style.display = 'block';
-    // Don't advance the offset - let them re-study if they want
-    showGroupSizeSelection();
+
+    if (currentMode === 'review') {
+        // Show review options again
+        document.getElementById('reviewOptionsSelection').style.display = 'block';
+        updateReviewProgressInfo();
+    } else {
+        // Don't advance the offset - let them re-study if they want
+        showGroupSizeSelection();
+    }
 }
 
 // Review Mode
@@ -915,15 +978,232 @@ function startReviewMode() {
         return;
     }
 
-    // Filter to only show difficult words
-    filteredWords = allWords.filter(word => progressData.difficult.includes(word.word));
+    // Show review options selection
+    document.getElementById('modeSelection').style.display = 'block';
+    document.getElementById('reviewOptionsSelection').style.display = 'block';
 
-    document.getElementById('modeTitle').textContent = 'Review Difficult Words';
-    document.getElementById('wordCard').style.display = 'block';
-    document.getElementById('answerSection').style.display = 'none';
-    document.getElementById('quizScore').style.display = 'none';
+    // Update progress info
+    updateReviewProgressInfo();
+}
 
-    loadRandomWord();
+function updateReviewProgressInfo() {
+    const wordListFilter = document.getElementById('reviewWordListFilter').value;
+
+    // Filter difficult words by selected word list
+    let difficultWordsFiltered;
+    if (wordListFilter === 'all') {
+        difficultWordsFiltered = allWords.filter(word => progressData.difficult.includes(word.word));
+    } else {
+        difficultWordsFiltered = allWords.filter(word =>
+            progressData.difficult.includes(word.word) && word.wordList === wordListFilter
+        );
+    }
+
+    // Get saved progress for this filter
+    reviewOffset = progressData.reviewOffsets[wordListFilter] || 0;
+
+    const totalWords = difficultWordsFiltered.length;
+    const progress = totalWords > 0 ? Math.round((reviewOffset / totalWords) * 100) : 0;
+
+    const progressInfo = document.getElementById('reviewProgressInfo');
+    if (totalWords === 0) {
+        progressInfo.textContent = `No difficult words in this category yet.`;
+    } else if (reviewOffset > 0 && reviewOffset < totalWords) {
+        progressInfo.textContent = `📍 You're at ${progress}% (${reviewOffset}/${totalWords} words reviewed)`;
+    } else if (reviewOffset === 0) {
+        progressInfo.textContent = `📍 Starting from the beginning (0/${totalWords} words)`;
+    } else {
+        progressInfo.textContent = `✅ You've completed all ${totalWords} words!`;
+    }
+}
+
+function startReviewWithOptions() {
+    const wordListFilter = document.getElementById('reviewWordListFilter').value;
+    const groupSizeOption = document.getElementById('reviewGroupSize').value;
+
+    // Filter difficult words by selected word list
+    let difficultWordsFiltered;
+    if (wordListFilter === 'all') {
+        difficultWordsFiltered = allWords.filter(word => progressData.difficult.includes(word.word));
+    } else {
+        difficultWordsFiltered = allWords.filter(word =>
+            progressData.difficult.includes(word.word) && word.wordList === wordListFilter
+        );
+    }
+
+    if (difficultWordsFiltered.length === 0) {
+        alert('No difficult words in this category yet!');
+        return;
+    }
+
+    // Sort alphabetically for consistent ordering
+    const alphabetical = [...difficultWordsFiltered].sort((a, b) => a.word.localeCompare(b.word));
+
+    // Get saved offset for this word list filter
+    reviewOffset = progressData.reviewOffsets[wordListFilter] || 0;
+
+    // Set group size
+    if (groupSizeOption === 'all') {
+        reviewGroupSize = alphabetical.length;
+    } else {
+        reviewGroupSize = parseInt(groupSizeOption);
+    }
+
+    // Check if we've reached the end
+    if (reviewOffset >= alphabetical.length) {
+        const restart = confirm(`You've completed all ${alphabetical.length} difficult words in this category! Start from the beginning?`);
+        if (restart) {
+            reviewOffset = 0;
+            progressData.reviewOffsets[wordListFilter] = 0;
+            saveProgressData();
+        } else {
+            return;
+        }
+    }
+
+    // Get next group of words starting from current offset
+    reviewGroup = alphabetical.slice(reviewOffset, reviewOffset + reviewGroupSize);
+
+    // If we don't have enough words left, take what's available
+    if (reviewGroup.length < reviewGroupSize && reviewGroup.length > 0) {
+        alert(`Only ${reviewGroup.length} words remaining in this section. Starting with those!`);
+    }
+
+    if (reviewGroup.length === 0) {
+        alert('No more words to review!');
+        return;
+    }
+
+    // Reset for new review session
+    flashcardIndex = 0;
+    testIndex = 0;
+    testScore = 0;
+    missedWords = [];
+    reviewPhase = 'learn';
+
+    // Hide options and show study card
+    document.getElementById('modeSelection').style.display = 'none';
+    document.getElementById('reviewOptionsSelection').style.display = 'none';
+    document.getElementById('studyCard').style.display = 'block';
+
+    startReviewLearnPhase();
+}
+
+function startReviewLearnPhase() {
+    reviewPhase = 'learn';
+    document.getElementById('learnPhase').style.display = 'block';
+    document.getElementById('testPhase').style.display = 'none';
+    document.getElementById('resultsPhase').style.display = 'none';
+
+    document.getElementById('totalFlashcards').textContent = reviewGroup.length;
+    showReviewFlashcard();
+}
+
+function showReviewFlashcard() {
+    currentWord = reviewGroup[flashcardIndex];
+    isFlipped = false;
+
+    document.getElementById('flashcardNumber').textContent = flashcardIndex + 1;
+    document.getElementById('flashcardWord').textContent = currentWord.word;
+    document.getElementById('flashcardDefinition').innerHTML = currentWord.definition;
+    document.getElementById('flashcardSentence').innerHTML = currentWord.sentence || 'No example sentence available.';
+
+    // Show front, hide back
+    document.getElementById('flashcardFront').style.display = 'block';
+    document.getElementById('flashcardBack').style.display = 'none';
+
+    // Update navigation buttons
+    document.getElementById('prevCardBtn').disabled = flashcardIndex === 0;
+
+    if (flashcardIndex === reviewGroup.length - 1) {
+        document.getElementById('nextCardBtn').style.display = 'none';
+        document.getElementById('startTestBtn').style.display = 'inline-block';
+    } else {
+        document.getElementById('nextCardBtn').style.display = 'inline-block';
+        document.getElementById('startTestBtn').style.display = 'none';
+    }
+}
+
+function startReviewTestPhase() {
+    reviewPhase = 'test';
+    document.getElementById('learnPhase').style.display = 'none';
+    document.getElementById('testPhase').style.display = 'block';
+
+    document.getElementById('totalTestWords').textContent = reviewGroup.length;
+    document.getElementById('testTotal').textContent = reviewGroup.length;
+
+    testIndex = 0;
+    testScore = 0;
+    missedWords = [];
+
+    showReviewTestWord();
+}
+
+function showReviewTestWord() {
+    if (testIndex >= reviewGroup.length) {
+        showReviewResults();
+        return;
+    }
+
+    currentWord = reviewGroup[testIndex];
+
+    document.getElementById('testNumber').textContent = testIndex + 1;
+    document.getElementById('testScore').textContent = testScore;
+
+    let definition = sanitizeGoogleLinksForQuiz(currentWord.definition);
+    definition = hideWordInText(definition, currentWord.word);
+    document.getElementById('testDefinition').innerHTML = definition;
+
+    document.getElementById('testInput').value = '';
+    document.getElementById('testFeedback').textContent = '';
+    document.getElementById('nextTestBtn').style.display = 'none';
+    document.getElementById('finishTestBtn').style.display = 'none';
+    document.getElementById('testInput').focus();
+
+    answerSubmitted = false;
+    speakTestWord();
+}
+
+function showReviewResults() {
+    reviewPhase = 'results';
+    document.getElementById('testPhase').style.display = 'none';
+    document.getElementById('resultsPhase').style.display = 'block';
+
+    const percentage = Math.round((testScore / reviewGroup.length) * 100);
+    document.getElementById('finalScore').textContent = `${testScore} / ${reviewGroup.length}`;
+    document.getElementById('scorePercentage').textContent = `${percentage}%`;
+
+    // Save progress - advance offset by the number of words reviewed
+    const wordListFilter = document.getElementById('reviewWordListFilter').value;
+    reviewOffset += reviewGroup.length;
+    progressData.reviewOffsets[wordListFilter] = reviewOffset;
+    saveProgressData();
+
+    // Show completion message
+    const wordListName = wordListFilter === 'all' ? 'All Difficult Words' : getWordListName(wordListFilter);
+    console.log(`📚 Review Progress: ${reviewOffset} difficult words from ${wordListName} reviewed`);
+}
+
+function continueReviewNextGroup() {
+    // Start next group with same settings
+    startReviewWithOptions();
+}
+
+function resetReviewProgress() {
+    const wordListFilter = document.getElementById('reviewWordListFilter').value;
+    const wordListName = wordListFilter === 'all' ? 'All Difficult Words' : getWordListName(wordListFilter);
+
+    if (confirm(`Reset your review progress for ${wordListName}? You'll start from the beginning again.`)) {
+        reviewOffset = 0;
+        progressData.reviewOffsets[wordListFilter] = 0;
+        saveProgressData();
+        updateReviewProgressInfo();
+        alert(`Review progress reset! You'll start from the beginning of ${wordListName}.`);
+    }
+}
+
+function cancelReviewOptions() {
+    exitMode();
 }
 
 // Roots Mode - Browse and Study
@@ -1343,6 +1623,14 @@ function loadProgressData() {
         }
         if (!progressData.studyOffsets) {
             progressData.studyOffsets = {
+                'all': 0,
+                '1000': 0,
+                '2000': 0,
+                '3000': 0
+            };
+        }
+        if (!progressData.reviewOffsets) {
+            progressData.reviewOffsets = {
                 'all': 0,
                 '1000': 0,
                 '2000': 0,
