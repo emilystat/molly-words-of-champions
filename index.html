@@ -11,7 +11,7 @@
         <!-- Header -->
         <header>
             <h1>🐝 Words of Champions 🐝</h1>
-            <p class="subtitle">Master 4,000 spelling bee words with roots & patterns</p>
+            <p class="subtitle">Master 4,002 spelling bee words with roots & patterns</p>
         </header>
 
         <!-- Mode Selection -->
@@ -52,9 +52,9 @@
                     <div class="filter-group">
                         <label for="wordListFilter">Choose Word List:</label>
                         <select id="wordListFilter" onchange="updateFilters()">
-                            <option value="all">All Words (4,000)</option>
-                            <option value="1000">One Bee (1,000 words)</option>
-                            <option value="2000">Two Bee (2,000 words)</option>
+                            <option value="all">All Words (4,002)</option>
+                            <option value="1000">One Bee (999 words)</option>
+                            <option value="2000">Two Bee (2,003 words)</option>
                             <option value="3000">Three Bee (1,000 words)</option>
                         </select>
                     </div>
@@ -66,12 +66,15 @@
             <!-- Study Mode Group Size Selection -->
             <div class="group-size-selection" id="groupSizeSelection" style="display: none;">
                 <h3>Choose Group Size</h3>
+                <p class="study-progress-info" id="studyProgressInfo" style="text-align: center; color: #666; margin-bottom: 15px;"></p>
                 <div class="size-buttons">
                     <button class="size-btn" onclick="setGroupSize(5)">5 words</button>
                     <button class="size-btn" onclick="setGroupSize(10)">10 words</button>
                     <button class="size-btn" onclick="setGroupSize(15)">15 words</button>
                     <button class="size-btn" onclick="setGroupSize(20)">20 words</button>
                 </div>
+                <button class="action-btn" onclick="resetCurrentListProgress()" style="margin-top: 10px; margin-right: 10px;">🔄 Start from Beginning</button>
+                <button class="action-btn" onclick="cancelGroupSizeSelection()" style="margin-top: 10px;">Cancel</button>
             </div>
 
             <!-- Quiz Mode Options Selection -->
@@ -82,8 +85,8 @@
                     <label>Word List:</label>
                     <select id="quizWordListFilter">
                         <option value="all">All Words</option>
-                        <option value="1000">One Bee (1,000 words)</option>
-                        <option value="2000">Two Bee (2,000 words)</option>
+                        <option value="1000">One Bee (999 words)</option>
+                        <option value="2000">Two Bee (2,003 words)</option>
                         <option value="3000">Three Bee (1,000 words)</option>
                         <option value="difficult">My Difficult Words Only</option>
                     </select>
@@ -204,11 +207,11 @@
 
                     <div class="flashcard" id="flashcard" onclick="flipCard()">
                         <div class="flashcard-front" id="flashcardFront">
-                            <h2 id="flashcardWord">Word</h2>
                             <button class="speak-btn" onclick="speakCurrentWord(event)">🔊 Hear Word</button>
-                            <p class="tap-hint">Tap to see definition</p>
+                            <p class="tap-hint">Tap to see definition & spelling</p>
                         </div>
                         <div class="flashcard-back" id="flashcardBack" style="display: none;">
+                            <h2 id="flashcardWord">Word</h2>
                             <p><strong>Definition:</strong></p>
                             <p id="flashcardDefinition"></p>
                             <p><strong>Sentence:</strong></p>
@@ -251,10 +254,12 @@
                     <div class="results-summary">
                         <p class="big-score"><span id="finalScore">0</span>/<span id="finalTotal">10</span></p>
                         <p id="resultsMessage"></p>
+                        <p id="overallProgress" style="color: #666; font-size: 0.9em; margin-top: 10px;"></p>
                     </div>
                     <div class="results-actions">
                         <button class="action-btn" onclick="reviewMissed()">Review Missed Words</button>
-                        <button class="action-btn primary" onclick="startNextGroup()">Next Group →</button>
+                        <button class="action-btn primary" onclick="continueNextGroup()">Continue (Same Size) →</button>
+                        <button class="action-btn" onclick="chooseNewGroupSize()">Choose New Group Size</button>
                         <button class="action-btn" onclick="exitMode()">Exit to Menu</button>
                     </div>
                 </div>

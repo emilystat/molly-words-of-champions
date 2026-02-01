@@ -26,7 +26,13 @@ let progressData = {
     mastered: [],     // [word1, word2, ...]
     difficult: [],    // [word1, word2, ...]
     rootsStudied: {}, // {root: {attempts: 0, correct: 0, lastStudied: timestamp}}
-    difficultRoots: [] // [root1, root2, ...] - roots marked as difficult
+    difficultRoots: [], // [root1, root2, ...] - roots marked as difficult
+    studyOffsets: {   // Track progress through each word list
+        'all': 0,
+        '1000': 0,
+        '2000': 0,
+        '3000': 0
+    }
 };
 
 // Roots organization
@@ -79,8 +85,8 @@ function updateFilters() {
         return wordListFilter === 'all' || word.wordList === wordListFilter;
     });
 
-    // Reset study offset when filters change
-    studyOffset = 0;
+    // Load the saved study offset for this word list
+    studyOffset = progressData.studyOffsets[wordListFilter] || 0;
 
     // Update filter info
     const filterInfo = document.getElementById('filterInfo');
@@ -102,16 +108,9 @@ function getWordListName(list) {
 function sanitizeGoogleLinksForQuiz(text) {
     if (!text) return text;
 
-    // Replace "Google 'word meaning'" with "Google meaning" (handles both single and double quotes)
-    text = text.replace(/Google ["']([^"']+) meaning["']/gi, 'Google meaning');
-
-    // Replace "Google 'word example sentence'" with "Google example" (handles both single and double quotes)
-    text = text.replace(/Google ["']([^"']+) example sentence["']/gi, 'Google example');
-
-    // Also sanitize the search query in the URL (replace q=word+meaning with q=meaning)
-    text = text.replace(/q=([^+&"]+)\+meaning/gi, 'q=meaning');
-    text = text.replace(/q=([^+&"]+)\+example\+sentence/gi, 'q=example+sentence');
-
+    // The Google links in the data are already formatted to not show the word
+    // (they say "Search Google" instead of showing the word)
+    // Keep the URL intact so searches are useful when clicked
     return text;
 }
 
@@ -131,8 +130,11 @@ function hideWordInText(text, word) {
 function selectMode(mode) {
     currentMode = mode;
 
-    // Hide mode selection
-    document.getElementById('modeSelection').style.display = 'none';
+    // For study and quiz modes, keep mode selection visible (they show additional options)
+    // For other modes, hide mode selection
+    if (mode !== 'study' && mode !== 'quiz') {
+        document.getElementById('modeSelection').style.display = 'none';
+    }
 
     // Show appropriate interface based on mode
     if (mode === 'practice') {
@@ -343,8 +345,8 @@ function markCurrentFlashcardDifficult() {
 
 // Quiz Mode
 function startQuizMode() {
-    // Show quiz options selection
-    document.getElementById('modeSelection').style.display = 'block';
+    // modeSelection is already visible from selectMode()
+    // Just show the quiz options selection panel
     document.getElementById('quizOptionsSelection').style.display = 'block';
 }
 
@@ -543,13 +545,51 @@ function showQuizResults() {
 
 // Study Mode
 function showGroupSizeSelection() {
-    document.getElementById('modeSelection').style.display = 'block';
+    // modeSelection is already visible from selectMode()
+    // Just show the group size selection panel
     document.getElementById('groupSizeSelection').style.display = 'block';
+
+    // Synchronize the global studyOffset with saved progress for current word list
+    const wordListFilter = document.getElementById('wordListFilter').value;
+    studyOffset = progressData.studyOffsets[wordListFilter] || 0;
+
+    // Show current progress
+    const alphabetical = [...filteredWords].sort((a, b) => a.word.localeCompare(b.word));
+    const totalWords = alphabetical.length;
+    const progress = Math.round((studyOffset / totalWords) * 100);
+
+    const progressInfo = document.getElementById('studyProgressInfo');
+    if (studyOffset > 0 && studyOffset < totalWords) {
+        const nextWord = alphabetical[studyOffset]?.word || '';
+        progressInfo.textContent = `📍 You're at ${progress}% (${studyOffset}/${totalWords} words studied). Next: "${nextWord}"`;
+    } else if (studyOffset === 0) {
+        progressInfo.textContent = `📍 Starting from the beginning (0/${totalWords} words)`;
+    } else {
+        progressInfo.textContent = `✅ You've completed all ${totalWords} words!`;
+    }
+}
+
+function cancelGroupSizeSelection() {
+    document.getElementById('groupSizeSelection').style.display = 'none';
+    exitMode();
+}
+
+function resetCurrentListProgress() {
+    const wordListFilter = document.getElementById('wordListFilter').value;
+    const wordListName = wordListFilter === 'all' ? 'All Words' : getWordListName(wordListFilter);
+
+    if (confirm(`Reset your progress for ${wordListName}? You'll start from the beginning again.`)) {
+        studyOffset = 0;
+        progressData.studyOffsets[wordListFilter] = 0;
+        saveProgressData();
+        showGroupSizeSelection(); // Refresh the progress display
+        alert(`Progress reset! You'll start from the beginning of ${wordListName}.`);
+    }
 }
 
 function setGroupSize(size) {
     studyGroupSize = size;
-    studyOffset = 0; // Reset to start from beginning when selecting group size
+    // Don't reset studyOffset - continue from saved position
     document.getElementById('groupSizeSelection').style.display = 'none';
     startStudyMode();
 }
@@ -568,10 +608,20 @@ function startStudyMode() {
     if (studyOffset >= alphabetical.length) {
         alert('🎉 You\'ve completed all words! Starting over from the beginning.');
         studyOffset = 0;
+        // Save the reset offset
+        const wordListFilter = document.getElementById('wordListFilter').value;
+        progressData.studyOffsets[wordListFilter] = 0;
+        saveProgressData();
     }
 
     // Get next group of words starting from current offset
     studyGroup = alphabetical.slice(studyOffset, studyOffset + studyGroupSize);
+
+    // Show progress indicator
+    const startWord = studyGroup[0]?.word || '';
+    const endWord = studyGroup[studyGroup.length - 1]?.word || '';
+    const progress = Math.round((studyOffset / alphabetical.length) * 100);
+    console.log(`📚 Study Progress: ${studyOffset}/${alphabetical.length} words (${progress}%) - Studying: ${startWord} to ${endWord}`);
 
     // If we don't have enough words left, take what's available
     if (studyGroup.length < studyGroupSize && studyGroup.length > 0) {
@@ -803,6 +853,22 @@ function showStudyResults() {
     else message = '📚 Keep practicing! Review and try again.';
 
     document.getElementById('resultsMessage').textContent = message;
+
+    // Show overall progress through the word list
+    const wordListFilter = document.getElementById('wordListFilter').value;
+    const alphabetical = [...filteredWords].sort((a, b) => a.word.localeCompare(b.word));
+    const nextOffset = studyOffset + studyGroupSize;
+    const totalWords = alphabetical.length;
+    const progress = Math.round((nextOffset / totalWords) * 100);
+
+    let progressMessage = '';
+    if (nextOffset < totalWords) {
+        progressMessage = `📚 Overall Progress: ${Math.min(nextOffset, totalWords)}/${totalWords} words (${progress}%)`;
+    } else {
+        progressMessage = `✅ You've completed all ${totalWords} words in this list!`;
+    }
+
+    document.getElementById('overallProgress').textContent = progressMessage;
 }
 
 function reviewMissed() {
@@ -821,10 +887,24 @@ function reviewMissed() {
     startLearnPhase();
 }
 
-function startNextGroup() {
-    // Move to next group of words
+function continueNextGroup() {
+    // Move to next group of words with same group size
     studyOffset += studyGroupSize;
+
+    // Save the updated offset for the current word list
+    const wordListFilter = document.getElementById('wordListFilter').value;
+    progressData.studyOffsets[wordListFilter] = studyOffset;
+    saveProgressData();
+
     startStudyMode();
+}
+
+function chooseNewGroupSize() {
+    // Hide study card and show group size selection again
+    document.getElementById('studyCard').style.display = 'none';
+    document.getElementById('modeSelection').style.display = 'block';
+    // Don't advance the offset - let them re-study if they want
+    showGroupSizeSelection();
 }
 
 // Review Mode
@@ -1260,6 +1340,14 @@ function loadProgressData() {
         }
         if (!progressData.difficultRoots) {
             progressData.difficultRoots = [];
+        }
+        if (!progressData.studyOffsets) {
+            progressData.studyOffsets = {
+                'all': 0,
+                '1000': 0,
+                '2000': 0,
+                '3000': 0
+            };
         }
     }
 }
