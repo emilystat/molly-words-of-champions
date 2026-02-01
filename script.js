@@ -162,7 +162,7 @@ function startPracticeMode() {
 
     document.getElementById('modeTitle').textContent = 'Practice Mode';
     document.getElementById('wordCard').style.display = 'block';
-    document.getElementById('answerSection').style.display = 'none';
+    document.getElementById('answerSection').style.display = 'block';
     document.getElementById('quizScore').style.display = 'none';
 
     loadRandomWord();
@@ -190,6 +190,14 @@ function displayWord(revealed) {
     } else {
         spellingEl.style.display = 'none';
         revealBtn.style.display = 'inline-block';
+
+        // Clear answer input and focus
+        document.getElementById('answerInput').value = '';
+        document.getElementById('feedbackMessage').textContent = '';
+        document.getElementById('answerInput').focus();
+
+        // Reset answer submitted flag
+        answerSubmitted = false;
 
         // Auto-pronounce word when first shown in practice mode
         speakWord();
@@ -223,6 +231,8 @@ function displayWord(revealed) {
 }
 
 function revealWord() {
+    // Mark as submitted so Enter key will advance to next word
+    answerSubmitted = true;
     displayWord(true);
 }
 
@@ -409,6 +419,25 @@ function checkAnswer() {
     // Mark as submitted
     answerSubmitted = true;
 
+    // Handle Practice Mode
+    if (currentMode === 'practice' || currentMode === 'review') {
+        if (userAnswer === correctAnswer) {
+            feedback.textContent = `✓ Correct! The word is "${currentWord.word}" (Press Enter for next word)`;
+            feedback.className = 'correct';
+            recordAttempt(currentWord.word, true);
+        } else {
+            feedback.textContent = `✗ Incorrect. The correct spelling is "${currentWord.word}" (Press Enter for next word)`;
+            feedback.className = 'incorrect';
+            recordAttempt(currentWord.word, false);
+            // Auto-mark incorrect words as difficult
+            addToDifficultWords(currentWord.word);
+        }
+        // Reveal the word
+        displayWord(true);
+        return;
+    }
+
+    // Handle Quiz Mode
     if (userAnswer === correctAnswer) {
         feedback.textContent = `✓ Correct! The word is "${currentWord.word}" (Press Enter for next word)`;
         feedback.className = 'correct';
@@ -444,14 +473,20 @@ function checkEnter(event) {
             // First Enter press - submit the answer
             checkAnswer();
         } else {
-            // Second Enter press - advance to next question
-            // Clear auto-advance timeout
-            if (quizAutoAdvanceTimeout) {
-                clearTimeout(quizAutoAdvanceTimeout);
-                quizAutoAdvanceTimeout = null;
+            // Second Enter press - advance to next question/word
+            if (currentMode === 'practice' || currentMode === 'review') {
+                // Practice/Review mode - load next random word
+                loadRandomWord();
+            } else {
+                // Quiz mode - advance to next question
+                // Clear auto-advance timeout
+                if (quizAutoAdvanceTimeout) {
+                    clearTimeout(quizAutoAdvanceTimeout);
+                    quizAutoAdvanceTimeout = null;
+                }
+                quizQuestion++;
+                loadQuizQuestion();
             }
-            quizQuestion++;
-            loadQuizQuestion();
         }
     }
 }
