@@ -189,6 +189,9 @@ function displayWord(revealed) {
     } else {
         spellingEl.style.display = 'none';
         revealBtn.style.display = 'inline-block';
+
+        // Auto-pronounce word when first shown in practice mode
+        speakWord();
     }
 
     // Sanitize Google links and hide sentence if word is not revealed (to prevent answer leakage)
@@ -379,10 +382,13 @@ function loadQuizQuestion() {
     document.getElementById('questionNumber').textContent = quizQuestion + 1;
     document.getElementById('currentScore').textContent = quizScore;
 
-    // Clear answer input
+    // Clear answer input and focus
     document.getElementById('answerInput').value = '';
     document.getElementById('feedbackMessage').textContent = '';
     document.getElementById('answerInput').focus();
+
+    // Auto-pronounce word
+    speakWord();
 }
 
 function checkAnswer() {
@@ -591,6 +597,9 @@ function showTestWord() {
     document.getElementById('nextTestBtn').style.display = 'none';
     document.getElementById('finishTestBtn').style.display = 'none';
     document.getElementById('testInput').focus();
+
+    // Auto-pronounce word
+    speakTestWord();
 }
 
 function speakTestWord() {
