@@ -102,13 +102,29 @@ function getWordListName(list) {
 function sanitizeGoogleLinksForQuiz(text) {
     if (!text) return text;
 
-    // Replace "Google 'word meaning'" with "Google meaning"
-    text = text.replace(/Google "([^"]+) meaning"/g, 'Google meaning');
+    // Replace "Google 'word meaning'" with "Google meaning" (handles both single and double quotes)
+    text = text.replace(/Google ["']([^"']+) meaning["']/gi, 'Google meaning');
 
-    // Replace "Google 'word example sentence'" with "Google example"
-    text = text.replace(/Google "([^"]+) example sentence"/g, 'Google example');
+    // Replace "Google 'word example sentence'" with "Google example" (handles both single and double quotes)
+    text = text.replace(/Google ["']([^"']+) example sentence["']/gi, 'Google example');
+
+    // Also sanitize the search query in the URL (replace q=word+meaning with q=meaning)
+    text = text.replace(/q=([^+&"]+)\+meaning/gi, 'q=meaning');
+    text = text.replace(/q=([^+&"]+)\+example\+sentence/gi, 'q=example+sentence');
 
     return text;
+}
+
+// Hide the target word in text by replacing it with underscores (for hiding word in sentences)
+function hideWordInText(text, word) {
+    if (!text || !word) return text;
+
+    // Create a regex that matches the word (case-insensitive, word boundaries)
+    const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escapedWord}\\b`, 'gi');
+
+    // Replace the word with underscores of the same length
+    return text.replace(regex, '_'.repeat(word.length));
 }
 
 // Mode Selection
@@ -203,9 +219,21 @@ function displayWord(revealed) {
         speakWord();
     }
 
-    // Sanitize Google links and hide sentence if word is not revealed (to prevent answer leakage)
-    const definition = revealed ? currentWord.definition : sanitizeGoogleLinksForQuiz(currentWord.definition);
-    const sentence = revealed ? (currentWord.sentence || 'No example sentence available.') : '';
+    // Sanitize Google links and hide the word in definition/sentence if not revealed
+    let definition, sentence;
+    if (revealed) {
+        definition = currentWord.definition;
+        sentence = currentWord.sentence || 'No example sentence available.';
+    } else {
+        // Hide the word in both definition and sentence
+        definition = sanitizeGoogleLinksForQuiz(currentWord.definition);
+        definition = hideWordInText(definition, currentWord.word);
+
+        sentence = currentWord.sentence || '';
+        if (sentence) {
+            sentence = hideWordInText(sentence, currentWord.word);
+        }
+    }
 
     document.getElementById('wordDefinition').innerHTML = definition;
     document.getElementById('wordSentence').innerHTML = sentence;
@@ -383,10 +411,14 @@ function loadQuizQuestion() {
 
     currentWord = quizWords[quizQuestion];
 
-    // Hide spelling, show definition (sanitize Google links to hide word, hide sentence to avoid revealing answer)
+    // Hide spelling, show definition (sanitize Google links and hide word in definition)
     document.getElementById('wordSpelling').style.display = 'none';
     document.getElementById('revealBtn').style.display = 'none';
-    document.getElementById('wordDefinition').innerHTML = sanitizeGoogleLinksForQuiz(currentWord.definition);
+
+    let definition = sanitizeGoogleLinksForQuiz(currentWord.definition);
+    definition = hideWordInText(definition, currentWord.word);
+    document.getElementById('wordDefinition').innerHTML = definition;
+
     document.getElementById('wordSentence').innerHTML = ''; // Hide sentence to prevent answer leakage
 
     // Update quiz stats
@@ -650,7 +682,11 @@ function showTestWord() {
 
     document.getElementById('testNumber').textContent = testIndex + 1;
     document.getElementById('testScore').textContent = testScore;
-    document.getElementById('testDefinition').innerHTML = sanitizeGoogleLinksForQuiz(currentWord.definition);
+
+    let definition = sanitizeGoogleLinksForQuiz(currentWord.definition);
+    definition = hideWordInText(definition, currentWord.word);
+    document.getElementById('testDefinition').innerHTML = definition;
+
     document.getElementById('testInput').value = '';
     document.getElementById('testFeedback').textContent = '';
     document.getElementById('nextTestBtn').style.display = 'none';
