@@ -761,6 +761,23 @@ function checkTestEnter(event) {
     }
 }
 
+function markTestWordDifficult() {
+    if (!currentWord) return;
+
+    if (!progressData.difficult.includes(currentWord.word)) {
+        progressData.difficult.push(currentWord.word);
+        saveProgressData();
+        alert(`"${currentWord.word}" marked as difficult!`);
+        updateProgressStats();
+    } else {
+        // Remove from difficult
+        progressData.difficult = progressData.difficult.filter(w => w !== currentWord.word);
+        saveProgressData();
+        alert(`"${currentWord.word}" removed from difficult words!`);
+        updateProgressStats();
+    }
+}
+
 function nextTestWord() {
     testIndex++;
     showTestWord();
