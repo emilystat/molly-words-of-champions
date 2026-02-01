@@ -184,8 +184,12 @@ function displayWord(revealed) {
         revealBtn.style.display = 'inline-block';
     }
 
-    document.getElementById('wordDefinition').innerHTML = currentWord.definition;
-    document.getElementById('wordSentence').innerHTML = currentWord.sentence || 'No example sentence available.';
+    // Sanitize Google links if word is not revealed (to prevent answer leakage)
+    const definition = revealed ? currentWord.definition : sanitizeGoogleLinksForQuiz(currentWord.definition);
+    const sentence = revealed ? (currentWord.sentence || 'No example sentence available.') : sanitizeGoogleLinksForQuiz(currentWord.sentence || 'No example sentence available.');
+
+    document.getElementById('wordDefinition').innerHTML = definition;
+    document.getElementById('wordSentence').innerHTML = sentence;
 
     // Etymology
     document.getElementById('wordOrigin').textContent = currentWord.languageOrigin || 'Unknown';
