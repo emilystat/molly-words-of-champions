@@ -93,6 +93,19 @@ function getWordListName(list) {
     return names[list] || list;
 }
 
+// Sanitize Google links for quiz/test modes (hide the word to avoid revealing answer)
+function sanitizeGoogleLinksForQuiz(text) {
+    if (!text) return text;
+
+    // Replace "Google 'word meaning'" with "Google meaning"
+    text = text.replace(/Google "([^"]+) meaning"/g, 'Google meaning');
+
+    // Replace "Google 'word example sentence'" with "Google example"
+    text = text.replace(/Google "([^"]+) example sentence"/g, 'Google example');
+
+    return text;
+}
+
 // Mode Selection
 function selectMode(mode) {
     currentMode = mode;
@@ -345,11 +358,11 @@ function loadQuizQuestion() {
 
     currentWord = quizWords[quizQuestion];
 
-    // Hide spelling, show definition
+    // Hide spelling, show definition (sanitize Google links to hide word)
     document.getElementById('wordSpelling').style.display = 'none';
     document.getElementById('revealBtn').style.display = 'none';
-    document.getElementById('wordDefinition').innerHTML = currentWord.definition;
-    document.getElementById('wordSentence').innerHTML = currentWord.sentence || 'No example sentence available.';
+    document.getElementById('wordDefinition').innerHTML = sanitizeGoogleLinksForQuiz(currentWord.definition);
+    document.getElementById('wordSentence').innerHTML = sanitizeGoogleLinksForQuiz(currentWord.sentence || 'No example sentence available.');
 
     // Update quiz stats
     document.getElementById('questionNumber').textContent = quizQuestion + 1;
@@ -546,7 +559,7 @@ function showTestWord() {
 
     document.getElementById('testNumber').textContent = testIndex + 1;
     document.getElementById('testScore').textContent = testScore;
-    document.getElementById('testDefinition').innerHTML = currentWord.definition;
+    document.getElementById('testDefinition').innerHTML = sanitizeGoogleLinksForQuiz(currentWord.definition);
     document.getElementById('testInput').value = '';
     document.getElementById('testFeedback').textContent = '';
     document.getElementById('nextTestBtn').style.display = 'none';
