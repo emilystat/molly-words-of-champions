@@ -18,6 +18,7 @@ let testIndex = 0;
 let testScore = 0;
 let missedWords = [];
 let studyOffset = 0; // Track position in filtered words for sequential study groups
+let answerSubmitted = false; // Track if answer has been submitted (for Enter key handling)
 
 // Progress Data (stored in localStorage)
 let progressData = {
@@ -387,30 +388,41 @@ function loadQuizQuestion() {
     document.getElementById('feedbackMessage').textContent = '';
     document.getElementById('answerInput').focus();
 
+    // Reset answer submitted flag
+    answerSubmitted = false;
+
     // Auto-pronounce word
     speakWord();
 }
 
+let quizAutoAdvanceTimeout = null; // Store timeout ID to allow clearing
+
 function checkAnswer() {
+    // Prevent double submission
+    if (answerSubmitted) return;
+
     const userAnswer = document.getElementById('answerInput').value.trim().toLowerCase();
     const correctAnswer = currentWord.word.toLowerCase();
 
     const feedback = document.getElementById('feedbackMessage');
 
+    // Mark as submitted
+    answerSubmitted = true;
+
     if (userAnswer === correctAnswer) {
-        feedback.textContent = `✓ Correct! The word is "${currentWord.word}"`;
+        feedback.textContent = `✓ Correct! The word is "${currentWord.word}" (Press Enter for next word)`;
         feedback.className = 'correct';
         quizScore++;
 
         // Update progress
         recordAttempt(currentWord.word, true);
 
-        setTimeout(() => {
+        quizAutoAdvanceTimeout = setTimeout(() => {
             quizQuestion++;
             loadQuizQuestion();
         }, 2000);
     } else {
-        feedback.textContent = `✗ Incorrect. The correct spelling is "${currentWord.word}"`;
+        feedback.textContent = `✗ Incorrect. The correct spelling is "${currentWord.word}" (Press Enter for next word)`;
         feedback.className = 'incorrect';
 
         // Update progress
@@ -419,7 +431,7 @@ function checkAnswer() {
         // Auto-mark incorrect words as difficult
         addToDifficultWords(currentWord.word);
 
-        setTimeout(() => {
+        quizAutoAdvanceTimeout = setTimeout(() => {
             quizQuestion++;
             loadQuizQuestion();
         }, 3000);
@@ -428,7 +440,19 @@ function checkAnswer() {
 
 function checkEnter(event) {
     if (event.key === 'Enter') {
-        checkAnswer();
+        if (!answerSubmitted) {
+            // First Enter press - submit the answer
+            checkAnswer();
+        } else {
+            // Second Enter press - advance to next question
+            // Clear auto-advance timeout
+            if (quizAutoAdvanceTimeout) {
+                clearTimeout(quizAutoAdvanceTimeout);
+                quizAutoAdvanceTimeout = null;
+            }
+            quizQuestion++;
+            loadQuizQuestion();
+        }
     }
 }
 
@@ -598,6 +622,9 @@ function showTestWord() {
     document.getElementById('finishTestBtn').style.display = 'none';
     document.getElementById('testInput').focus();
 
+    // Reset answer submitted flag
+    answerSubmitted = false;
+
     // Auto-pronounce word
     speakTestWord();
 }
@@ -611,18 +638,24 @@ function speakTestWord() {
 }
 
 function submitTestAnswer() {
+    // Prevent double submission
+    if (answerSubmitted) return;
+
     const userAnswer = document.getElementById('testInput').value.trim().toLowerCase();
     const correctAnswer = currentWord.word.toLowerCase();
 
     const feedback = document.getElementById('testFeedback');
 
+    // Mark as submitted
+    answerSubmitted = true;
+
     if (userAnswer === correctAnswer) {
-        feedback.textContent = `✓ Correct! "${currentWord.word}"`;
+        feedback.textContent = `✓ Correct! "${currentWord.word}" (Press Enter for next word)`;
         feedback.className = 'correct';
         testScore++;
         recordAttempt(currentWord.word, true);
     } else {
-        feedback.textContent = `✗ Incorrect. The correct spelling is "${currentWord.word}"`;
+        feedback.textContent = `✗ Incorrect. The correct spelling is "${currentWord.word}" (Press Enter for next word)`;
         feedback.className = 'incorrect';
         recordAttempt(currentWord.word, false);
         missedWords.push(currentWord);
@@ -643,7 +676,17 @@ function submitTestAnswer() {
 
 function checkTestEnter(event) {
     if (event.key === 'Enter') {
-        submitTestAnswer();
+        if (!answerSubmitted) {
+            // First Enter press - submit the answer
+            submitTestAnswer();
+        } else {
+            // Second Enter press - advance to next word or finish
+            if (testIndex < studyGroup.length - 1) {
+                nextTestWord();
+            } else {
+                finishStudyGroup();
+            }
+        }
     }
 }
 
