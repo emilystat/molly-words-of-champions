@@ -184,9 +184,9 @@ function displayWord(revealed) {
         revealBtn.style.display = 'inline-block';
     }
 
-    // Sanitize Google links if word is not revealed (to prevent answer leakage)
+    // Sanitize Google links and hide sentence if word is not revealed (to prevent answer leakage)
     const definition = revealed ? currentWord.definition : sanitizeGoogleLinksForQuiz(currentWord.definition);
-    const sentence = revealed ? (currentWord.sentence || 'No example sentence available.') : sanitizeGoogleLinksForQuiz(currentWord.sentence || 'No example sentence available.');
+    const sentence = revealed ? (currentWord.sentence || 'No example sentence available.') : '';
 
     document.getElementById('wordDefinition').innerHTML = definition;
     document.getElementById('wordSentence').innerHTML = sentence;
@@ -362,11 +362,11 @@ function loadQuizQuestion() {
 
     currentWord = quizWords[quizQuestion];
 
-    // Hide spelling, show definition (sanitize Google links to hide word)
+    // Hide spelling, show definition (sanitize Google links to hide word, hide sentence to avoid revealing answer)
     document.getElementById('wordSpelling').style.display = 'none';
     document.getElementById('revealBtn').style.display = 'none';
     document.getElementById('wordDefinition').innerHTML = sanitizeGoogleLinksForQuiz(currentWord.definition);
-    document.getElementById('wordSentence').innerHTML = sanitizeGoogleLinksForQuiz(currentWord.sentence || 'No example sentence available.');
+    document.getElementById('wordSentence').innerHTML = ''; // Hide sentence to prevent answer leakage
 
     // Update quiz stats
     document.getElementById('questionNumber').textContent = quizQuestion + 1;
