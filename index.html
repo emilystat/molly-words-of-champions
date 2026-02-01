@@ -45,12 +45,12 @@
                 </button>
             </div>
 
-            <!-- Dual Filtering System -->
+            <!-- Word List Filter -->
             <div class="filter-section">
                 <h3>Filter Words</h3>
                 <div class="filter-controls">
                     <div class="filter-group">
-                        <label for="wordListFilter">Word List Level:</label>
+                        <label for="wordListFilter">Choose Word List:</label>
                         <select id="wordListFilter" onchange="updateFilters()">
                             <option value="all">All Words (4,000)</option>
                             <option value="1000">One Bee (1,000 words)</option>
@@ -58,17 +58,9 @@
                             <option value="3000">Three Bee (1,000 words)</option>
                         </select>
                     </div>
-                    <div class="filter-group">
-                        <label for="difficultyFilter">Bee Difficulty:</label>
-                        <select id="difficultyFilter" onchange="updateFilters()">
-                            <option value="all">All Difficulties</option>
-                            <option value="oneBee">One Bee Difficulty</option>
-                            <option value="twoBee">Two Bee Difficulty</option>
-                            <option value="threeBee">Three Bee Difficulty</option>
-                        </select>
-                    </div>
                 </div>
                 <p class="filter-info" id="filterInfo">Showing all 4,000 words</p>
+                <p class="filter-note">💡 Tip: Quiz Mode has its own filter options. Use "Review Difficult Words" to practice your marked words!</p>
             </div>
 
             <!-- Study Mode Group Size Selection -->
@@ -80,6 +72,33 @@
                     <button class="size-btn" onclick="setGroupSize(15)">15 words</button>
                     <button class="size-btn" onclick="setGroupSize(20)">20 words</button>
                 </div>
+            </div>
+
+            <!-- Quiz Mode Options Selection -->
+            <div class="quiz-options-selection" id="quizOptionsSelection" style="display: none;">
+                <h3>Quiz Options</h3>
+
+                <div class="quiz-option-group">
+                    <label>Word List:</label>
+                    <select id="quizWordListFilter">
+                        <option value="all">All Words</option>
+                        <option value="1000">One Bee (1,000 words)</option>
+                        <option value="2000">Two Bee (2,000 words)</option>
+                        <option value="3000">Three Bee (1,000 words)</option>
+                        <option value="difficult">My Difficult Words Only</option>
+                    </select>
+                </div>
+
+                <div class="quiz-option-group">
+                    <label>Word Order:</label>
+                    <select id="quizOrderFilter">
+                        <option value="random">Random</option>
+                        <option value="alphabetical">Alphabetical</option>
+                    </select>
+                </div>
+
+                <button class="action-btn primary" onclick="startQuizWithOptions()">Start Quiz →</button>
+                <button class="action-btn" onclick="cancelQuizOptions()">Cancel</button>
             </div>
 
             <!-- Progress Overview -->
@@ -186,6 +205,7 @@
                     <div class="flashcard" id="flashcard" onclick="flipCard()">
                         <div class="flashcard-front" id="flashcardFront">
                             <h2 id="flashcardWord">Word</h2>
+                            <button class="speak-btn" onclick="speakCurrentWord(event)">🔊 Hear Word</button>
                             <p class="tap-hint">Tap to see definition</p>
                         </div>
                         <div class="flashcard-back" id="flashcardBack" style="display: none;">
@@ -198,6 +218,7 @@
                     </div>
 
                     <div class="study-navigation">
+                        <button class="action-btn" onclick="markCurrentFlashcardDifficult()">⭐ Mark as Difficult</button>
                         <button class="action-btn" onclick="previousCard()" id="prevCardBtn">← Previous</button>
                         <button class="action-btn primary" onclick="nextCard()" id="nextCardBtn">Next →</button>
                         <button class="action-btn success" onclick="startTestPhase()" id="startTestBtn" style="display: none;">Start Test →</button>
@@ -247,15 +268,115 @@
             </div>
 
             <div class="roots-content">
-                <!-- Language Family Selector -->
-                <div class="language-selector">
-                    <h3>Browse by Language Family</h3>
-                    <div class="language-buttons" id="languageButtons"></div>
+                <!-- Browse Mode -->
+                <div id="rootsBrowseMode">
+                    <!-- Mode Selection -->
+                    <div class="roots-mode-selector">
+                        <button class="action-btn" onclick="showRootsTab('greek')">📚 Greek Roots (40)</button>
+                        <button class="action-btn" onclick="showRootsTab('latin')">📚 Latin Roots (21)</button>
+                        <button class="action-btn" onclick="showRootsTab('difficult')">⭐ My Difficult Roots (<span id="difficultRootsCount">0</span>)</button>
+                        <button class="action-btn primary" onclick="startRootsStudyOptions()">✏️ Study Roots</button>
+                    </div>
+
+                    <!-- Roots List -->
+                    <div class="roots-list" id="rootsList">
+                        <p class="hint">Select Greek or Latin roots to browse, or click "Study Roots" to practice</p>
+                    </div>
                 </div>
 
-                <!-- Roots List -->
-                <div class="roots-list" id="rootsList">
-                    <p class="hint">Select a language family to see roots and example words</p>
+                <!-- Study Options -->
+                <div id="rootsStudyOptions" style="display: none;">
+                    <h3>Study Roots - Choose Options</h3>
+
+                    <div class="quiz-option-group">
+                        <label>Which Roots to Study:</label>
+                        <select id="rootsLanguageFilter">
+                            <option value="all">All Roots (61)</option>
+                            <option value="greek">Greek Roots Only (40)</option>
+                            <option value="latin">Latin Roots Only (21)</option>
+                            <option value="difficult">My Difficult Roots Only</option>
+                        </select>
+                    </div>
+
+                    <div class="quiz-option-group">
+                        <label>Group Size:</label>
+                        <select id="rootsGroupSize">
+                            <option value="5">5 roots</option>
+                            <option value="10">10 roots</option>
+                            <option value="15">15 roots</option>
+                            <option value="20">20 roots</option>
+                        </select>
+                    </div>
+
+                    <button class="action-btn primary" onclick="startRootsStudyWithOptions()">Start Study →</button>
+                    <button class="action-btn" onclick="cancelRootsStudy()">Cancel</button>
+                </div>
+
+                <!-- Study Flashcards -->
+                <div id="rootsLearnPhase" style="display: none;">
+                    <h3>Learn Phase - Root <span id="rootsFlashcardNumber">1</span> of <span id="rootsTotalFlashcards">10</span></h3>
+
+                    <div class="flashcard" onclick="flipRootCard()">
+                        <div class="flashcard-front" id="rootsFlashcardFront">
+                            <h2 id="rootsFlashcardRoot">Root</h2>
+                            <p class="root-language" id="rootsFlashcardLanguage">Language Family</p>
+                            <p class="tap-hint">Tap to see meaning & examples</p>
+                        </div>
+                        <div class="flashcard-back" id="rootsFlashcardBack" style="display: none;">
+                            <p><strong>Meaning:</strong></p>
+                            <p id="rootsFlashcardMeaning"></p>
+                            <p><strong>Example Words:</strong></p>
+                            <p id="rootsFlashcardExamples"></p>
+                        </div>
+                    </div>
+
+                    <div class="study-navigation">
+                        <button class="action-btn" onclick="markCurrentRootDifficult()">⭐ Mark as Difficult</button>
+                        <button class="action-btn" onclick="previousRootCard()" id="prevRootCardBtn">← Previous</button>
+                        <button class="action-btn primary" onclick="nextRootCard()" id="nextRootCardBtn">Next →</button>
+                        <button class="action-btn success" onclick="startRootsTestPhase()" id="startRootsTestBtn" style="display: none;">Start Test →</button>
+                    </div>
+                </div>
+
+                <!-- Test Phase -->
+                <div id="rootsTestPhase" style="display: none;">
+                    <h3>Test Phase - Root <span id="rootsTestNumber">1</span> of <span id="rootsTotalTestRoots">10</span></h3>
+                    <p>Score: <span id="rootsTestScore">0</span>/<span id="rootsTestTotal">10</span></p>
+
+                    <div class="test-section">
+                        <h3 id="rootsTestRoot">Root</h3>
+                        <p class="root-language" id="rootsTestLanguage">Language</p>
+                        <p><strong>What does this root mean?</strong></p>
+
+                        <div class="multiple-choice-options" id="rootsMultipleChoice">
+                            <!-- Multiple choice buttons will be generated here -->
+                        </div>
+
+                        <p id="rootsTestFeedback"></p>
+                        <div id="rootsTestCorrectAnswer" style="display: none;">
+                            <p><strong>Correct meaning:</strong> <span id="rootsCorrectMeaning"></span></p>
+                            <p><strong>Examples:</strong> <span id="rootsCorrectExamples"></span></p>
+                        </div>
+                    </div>
+
+                    <div class="test-navigation">
+                        <button class="action-btn primary" onclick="nextRootsTestRoot()" id="nextRootsTestBtn" style="display: none;">Next Root →</button>
+                        <button class="action-btn success" onclick="finishRootsStudy()" id="finishRootsTestBtn" style="display: none;">Finish Test →</button>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div id="rootsResultsPhase" style="display: none;">
+                    <h3>Roots Study Complete!</h3>
+                    <div class="results-summary">
+                        <p class="big-score"><span id="rootsFinalScore">0</span>/<span id="rootsFinalTotal">10</span></p>
+                        <p id="rootsResultsMessage"></p>
+                    </div>
+                    <div class="results-actions">
+                        <button class="action-btn" onclick="reviewMissedRoots()">Review Missed Roots</button>
+                        <button class="action-btn primary" onclick="startRootsStudyOptions()">Study Another Group →</button>
+                        <button class="action-btn" onclick="exitMode()">Exit to Menu</button>
+                    </div>
                 </div>
             </div>
         </div>

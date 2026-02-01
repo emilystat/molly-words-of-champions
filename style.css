@@ -168,6 +168,13 @@ header h1 {
     margin-top: 10px;
 }
 
+.filter-note {
+    text-align: center;
+    color: var(--accent-color);
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
 /* Group Size Selection */
 .group-size-selection {
     background: #f0f8ff;
@@ -203,6 +210,45 @@ header h1 {
 .size-btn:hover {
     background: var(--primary-color);
     transform: scale(1.05);
+}
+
+/* Quiz Options Selection */
+.quiz-options-selection {
+    background: #fff8e1;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.quiz-options-selection h3 {
+    color: var(--accent-color);
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.quiz-option-group {
+    margin-bottom: 15px;
+}
+
+.quiz-option-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: var(--text-color);
+}
+
+.quiz-option-group select {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid var(--primary-color);
+    border-radius: 8px;
+    font-size: 1em;
+    background: white;
+    cursor: pointer;
+}
+
+.quiz-options-selection button {
+    margin: 10px 5px 0 0;
 }
 
 /* Progress Overview */
@@ -703,6 +749,72 @@ header h1 {
     font-size: 0.9em;
     color: var(--text-light);
     margin-top: 10px;
+}
+
+.root-language {
+    display: inline-block;
+    background: var(--accent-color);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.roots-mode-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.roots-mode-selector button {
+    flex: 1;
+    min-width: 150px;
+}
+
+/* Multiple Choice Options */
+.multiple-choice-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.choice-btn {
+    padding: 15px 20px;
+    background: white;
+    border: 2px solid var(--primary-color);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em;
+    text-align: left;
+    transition: all 0.2s;
+    color: var(--text-color);
+}
+
+.choice-btn:hover:not(:disabled) {
+    background: var(--primary-color);
+    color: white;
+    transform: translateX(5px);
+}
+
+.choice-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.choice-btn.correct {
+    background: #4caf50;
+    border-color: #4caf50;
+    color: white;
+}
+
+.choice-btn.incorrect {
+    background: #f44336;
+    border-color: #f44336;
+    color: white;
 }
 
 /* Footer */

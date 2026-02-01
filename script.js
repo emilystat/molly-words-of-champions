@@ -22,13 +22,27 @@ let missedWords = [];
 let progressData = {
     studied: {},      // {word: {attempts: 0, correct: 0, lastStudied: timestamp}}
     mastered: [],     // [word1, word2, ...]
-    difficult: []     // [word1, word2, ...]
+    difficult: [],    // [word1, word2, ...]
+    rootsStudied: {}, // {root: {attempts: 0, correct: 0, lastStudied: timestamp}}
+    difficultRoots: [] // [root1, root2, ...] - roots marked as difficult
 };
+
+// Roots organization
+let greekRoots = [];
+let latinRoots = [];
+let allRoots = [];
+let currentRootsStudyGroup = [];
+let rootsStudyIndex = 0;
+let rootsTestScore = 0;
+let rootsMissedRoots = [];
+let rootsStudyPhase = 'browse'; // 'browse', 'learn', 'test', 'results'
+let currentRootsTab = null; // Track which tab is currently showing
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', function() {
     loadProgressData();
     combineAllWords();
+    organizeRoots();
     updateFilters();
     updateProgressStats();
 });
@@ -43,23 +57,31 @@ function combineAllWords() {
     filteredWords = [...allWords];
 }
 
+// Organize roots by language family
+function organizeRoots() {
+    if (typeof rootsData === 'undefined') {
+        console.warn('rootsData not loaded');
+        return;
+    }
+
+    greekRoots = rootsData.filter(r => r.languageFamily === 'Greek').sort((a, b) => a.root.localeCompare(b.root));
+    latinRoots = rootsData.filter(r => r.languageFamily === 'Latin').sort((a, b) => a.root.localeCompare(b.root));
+    allRoots = [...greekRoots, ...latinRoots];
+}
+
 // Filter Management
 function updateFilters() {
     const wordListFilter = document.getElementById('wordListFilter').value;
-    const difficultyFilter = document.getElementById('difficultyFilter').value;
 
     filteredWords = allWords.filter(word => {
-        let matchWordList = wordListFilter === 'all' || word.wordList === wordListFilter;
-        let matchDifficulty = difficultyFilter === 'all' || word.beeDifficulty === difficultyFilter;
-        return matchWordList && matchDifficulty;
+        return wordListFilter === 'all' || word.wordList === wordListFilter;
     });
 
     // Update filter info
     const filterInfo = document.getElementById('filterInfo');
-    const wordListName = wordListFilter === 'all' ? 'all' : getWordListName(wordListFilter);
-    const difficultyName = difficultyFilter === 'all' ? 'all difficulties' : getDifficultyName(difficultyFilter);
+    const wordListName = wordListFilter === 'all' ? 'All Words' : getWordListName(wordListFilter);
 
-    filterInfo.textContent = `Showing ${filteredWords.length} words (${wordListName}, ${difficultyName})`;
+    filterInfo.textContent = `Showing ${filteredWords.length} words from ${wordListName}`;
 }
 
 function getWordListName(list) {
@@ -69,15 +91,6 @@ function getWordListName(list) {
         '3000': 'Three Bee'
     };
     return names[list] || list;
-}
-
-function getDifficultyName(difficulty) {
-    const names = {
-        'oneBee': 'One Bee difficulty',
-        'twoBee': 'Two Bee difficulty',
-        'threeBee': 'Three Bee difficulty'
-    };
-    return names[difficulty] || difficulty;
 }
 
 // Mode Selection
@@ -109,6 +122,7 @@ function exitMode() {
     document.getElementById('studyCard').style.display = 'none';
     document.getElementById('rootsBrowser').style.display = 'none';
     document.getElementById('groupSizeSelection').style.display = 'none';
+    document.getElementById('quizOptionsSelection').style.display = 'none';
 
     // Show mode selection
     document.getElementById('modeSelection').style.display = 'block';
@@ -157,8 +171,8 @@ function displayWord(revealed) {
         revealBtn.style.display = 'inline-block';
     }
 
-    document.getElementById('wordDefinition').textContent = currentWord.definition;
-    document.getElementById('wordSentence').textContent = currentWord.sentence || 'No example sentence available.';
+    document.getElementById('wordDefinition').innerHTML = currentWord.definition;
+    document.getElementById('wordSentence').innerHTML = currentWord.sentence || 'No example sentence available.';
 
     // Etymology
     document.getElementById('wordOrigin').textContent = currentWord.languageOrigin || 'Unknown';
@@ -234,20 +248,87 @@ function markDifficult() {
     }
 }
 
+// Helper function to mark word as difficult without alert (for auto-marking)
+function addToDifficultWords(word) {
+    if (!progressData.difficult.includes(word)) {
+        progressData.difficult.push(word);
+        saveProgressData();
+        updateProgressStats();
+    }
+}
+
+// Mark current flashcard as difficult (for study mode)
+function markCurrentFlashcardDifficult() {
+    if (!currentWord) return;
+
+    if (!progressData.difficult.includes(currentWord.word)) {
+        progressData.difficult.push(currentWord.word);
+        saveProgressData();
+        alert(`"${currentWord.word}" marked as difficult!`);
+        updateProgressStats();
+    } else {
+        // Remove from difficult
+        progressData.difficult = progressData.difficult.filter(w => w !== currentWord.word);
+        saveProgressData();
+        alert(`"${currentWord.word}" removed from difficult words!`);
+        updateProgressStats();
+    }
+}
+
 // Quiz Mode
 function startQuizMode() {
-    if (filteredWords.length < 10) {
-        alert('Need at least 10 words for quiz mode! Adjust your filters.');
-        exitMode();
+    // Show quiz options selection
+    document.getElementById('modeSelection').style.display = 'block';
+    document.getElementById('quizOptionsSelection').style.display = 'block';
+}
+
+function cancelQuizOptions() {
+    document.getElementById('quizOptionsSelection').style.display = 'none';
+    exitMode();
+}
+
+function startQuizWithOptions() {
+    const wordListOption = document.getElementById('quizWordListFilter').value;
+    const orderOption = document.getElementById('quizOrderFilter').value;
+
+    // Filter words based on selected options
+    let quizPool = [];
+
+    if (wordListOption === 'difficult') {
+        // Use only difficult words
+        if (progressData.difficult.length < 10) {
+            alert('You need at least 10 difficult words marked! Current: ' + progressData.difficult.length);
+            return;
+        }
+        quizPool = allWords.filter(word => progressData.difficult.includes(word.word));
+    } else if (wordListOption === 'all') {
+        quizPool = [...allWords];
+    } else {
+        // Filter by word list (1000, 2000, or 3000)
+        quizPool = allWords.filter(word => word.wordList === wordListOption);
+    }
+
+    if (quizPool.length < 10) {
+        alert(`Need at least 10 words for quiz mode! Selected pool has ${quizPool.length} words.`);
         return;
     }
 
-    // Select 10 random words
-    const shuffled = [...filteredWords].sort(() => Math.random() - 0.5);
-    quizWords = shuffled.slice(0, 10);
+    // Order words based on selected option
+    if (orderOption === 'alphabetical') {
+        quizPool.sort((a, b) => a.word.localeCompare(b.word));
+        quizWords = quizPool.slice(0, 10);
+    } else {
+        // Random order
+        const shuffled = [...quizPool].sort(() => Math.random() - 0.5);
+        quizWords = shuffled.slice(0, 10);
+    }
+
     quizScore = 0;
     quizQuestion = 0;
 
+    // Hide options, show quiz
+    document.getElementById('modeSelection').style.display = 'none';
+    document.getElementById('quizOptionsSelection').style.display = 'none';
     document.getElementById('modeTitle').textContent = 'Quiz Mode';
     document.getElementById('wordCard').style.display = 'block';
     document.getElementById('answerSection').style.display = 'block';
@@ -267,8 +348,8 @@ function loadQuizQuestion() {
     // Hide spelling, show definition
     document.getElementById('wordSpelling').style.display = 'none';
     document.getElementById('revealBtn').style.display = 'none';
-    document.getElementById('wordDefinition').textContent = currentWord.definition;
-    document.getElementById('wordSentence').textContent = currentWord.sentence || 'No example sentence available.';
+    document.getElementById('wordDefinition').innerHTML = currentWord.definition;
+    document.getElementById('wordSentence').innerHTML = currentWord.sentence || 'No example sentence available.';
 
     // Update quiz stats
     document.getElementById('questionNumber').textContent = quizQuestion + 1;
@@ -304,6 +385,9 @@ function checkAnswer() {
 
         // Update progress
         recordAttempt(currentWord.word, false);
+
+        // Auto-mark incorrect words as difficult
+        addToDifficultWords(currentWord.word);
 
         setTimeout(() => {
             quizQuestion++;
@@ -355,9 +439,9 @@ function startStudyMode() {
         return;
     }
 
-    // Select random words for study group
-    const shuffled = [...filteredWords].sort(() => Math.random() - 0.5);
-    studyGroup = shuffled.slice(0, studyGroupSize);
+    // Select words alphabetically for study group
+    const alphabetical = [...filteredWords].sort((a, b) => a.word.localeCompare(b.word));
+    studyGroup = alphabetical.slice(0, studyGroupSize);
 
     flashcardIndex = 0;
     testIndex = 0;
@@ -386,8 +470,8 @@ function showFlashcard() {
 
     document.getElementById('flashcardNumber').textContent = flashcardIndex + 1;
     document.getElementById('flashcardWord').textContent = currentWord.word;
-    document.getElementById('flashcardDefinition').textContent = currentWord.definition;
-    document.getElementById('flashcardSentence').textContent = currentWord.sentence || 'No example sentence available.';
+    document.getElementById('flashcardDefinition').innerHTML = currentWord.definition;
+    document.getElementById('flashcardSentence').innerHTML = currentWord.sentence || 'No example sentence available.';
 
     // Show front, hide back
     document.getElementById('flashcardFront').style.display = 'block';
@@ -462,7 +546,7 @@ function showTestWord() {
 
     document.getElementById('testNumber').textContent = testIndex + 1;
     document.getElementById('testScore').textContent = testScore;
-    document.getElementById('testDefinition').textContent = currentWord.definition;
+    document.getElementById('testDefinition').innerHTML = currentWord.definition;
     document.getElementById('testInput').value = '';
     document.getElementById('testFeedback').textContent = '';
     document.getElementById('nextTestBtn').style.display = 'none';
@@ -494,6 +578,9 @@ function submitTestAnswer() {
         feedback.className = 'incorrect';
         recordAttempt(currentWord.word, false);
         missedWords.push(currentWord);
+
+        // Auto-mark incorrect words as difficult
+        addToDifficultWords(currentWord.word);
     }
 
     document.getElementById('testScore').textContent = testScore;
@@ -578,54 +665,406 @@ function startReviewMode() {
     loadRandomWord();
 }
 
-// Roots Mode
+// Roots Mode - Browse and Study
 function startRootsMode() {
     document.getElementById('rootsBrowser').style.display = 'block';
+    document.getElementById('rootsBrowseMode').style.display = 'block';
+    document.getElementById('rootsStudyOptions').style.display = 'none';
+    document.getElementById('rootsLearnPhase').style.display = 'none';
+    document.getElementById('rootsTestPhase').style.display = 'none';
+    document.getElementById('rootsResultsPhase').style.display = 'none';
 
-    // Populate language buttons
-    const languageButtons = document.getElementById('languageButtons');
-    languageButtons.innerHTML = '';
+    // Update difficult roots count
+    document.getElementById('difficultRootsCount').textContent = progressData.difficultRoots.length;
 
-    Object.keys(rootsLibrary).forEach(language => {
-        const btn = document.createElement('button');
-        btn.className = 'language-btn';
-        btn.textContent = language;
-        btn.onclick = () => showRootsForLanguage(language, btn);
-        languageButtons.appendChild(btn);
-    });
+    rootsStudyPhase = 'browse';
 }
 
-function showRootsForLanguage(language, btnElement) {
-    // Highlight active button
-    document.querySelectorAll('.language-btn').forEach(btn => btn.classList.remove('active'));
-    btnElement.classList.add('active');
-
-    // Display roots
+function showRootsTab(language) {
+    currentRootsTab = language; // Track current tab
     const rootsList = document.getElementById('rootsList');
     rootsList.innerHTML = '';
 
-    const roots = rootsLibrary[language];
-    if (!roots || roots.length === 0) {
-        rootsList.innerHTML = '<p class="hint">No roots available for this language family.</p>';
-        return;
+    let rootsToShow = [];
+    let title = '';
+
+    if (language === 'greek') {
+        rootsToShow = greekRoots;
+        title = `<h3>Greek Roots (${greekRoots.length})</h3>`;
+    } else if (language === 'latin') {
+        rootsToShow = latinRoots;
+        title = `<h3>Latin Roots (${latinRoots.length})</h3>`;
+    } else if (language === 'difficult') {
+        rootsToShow = allRoots.filter(root => progressData.difficultRoots.includes(root.root));
+        title = `<h3>My Difficult Roots (${rootsToShow.length})</h3>`;
+        if (rootsToShow.length === 0) {
+            rootsList.innerHTML = '<p class="hint">No difficult roots marked yet! Mark roots as difficult while browsing or studying.</p>';
+            return;
+        }
     }
 
-    roots.forEach(root => {
+    rootsList.innerHTML = title;
+
+    rootsToShow.forEach(root => {
         const rootCard = document.createElement('div');
         rootCard.className = 'root-card';
 
+        const isDifficult = progressData.difficultRoots.includes(root.root);
+        const buttonText = isDifficult ? '⭐ Remove from Difficult' : '⭐ Mark as Difficult';
+
         rootCard.innerHTML = `
             <h4>${root.root}</h4>
-            <p class="meaning">${root.meaning}</p>
+            <p class="root-language">${root.languageFamily}</p>
+            <p class="meaning"><strong>Meaning:</strong> ${root.meaning}</p>
             <div class="examples">
                 <strong>Example Words:</strong>
-                <p class="example-words">${root.exampleWords.join(', ')}</p>
+                <p class="example-words">${root.examples}</p>
             </div>
-            ${root.notes ? `<p class="notes">${root.notes}</p>` : ''}
+            <button class="action-btn" onclick="markRootDifficultFromBrowse('${root.root}')" style="margin-top: 10px;">${buttonText}</button>
         `;
 
         rootsList.appendChild(rootCard);
     });
+}
+
+// Roots Study Mode
+function startRootsStudyOptions() {
+    document.getElementById('rootsBrowseMode').style.display = 'none';
+    document.getElementById('rootsStudyOptions').style.display = 'block';
+}
+
+function cancelRootsStudy() {
+    document.getElementById('rootsStudyOptions').style.display = 'none';
+    document.getElementById('rootsBrowseMode').style.display = 'block';
+    startRootsMode();
+}
+
+function startRootsStudyWithOptions() {
+    const languageOption = document.getElementById('rootsLanguageFilter').value;
+    const groupSize = parseInt(document.getElementById('rootsGroupSize').value);
+
+    // Select roots pool
+    let rootsPool = [];
+    if (languageOption === 'difficult') {
+        // Use only difficult roots
+        if (progressData.difficultRoots.length < groupSize) {
+            alert(`You need at least ${groupSize} difficult roots marked! Current: ${progressData.difficultRoots.length}`);
+            return;
+        }
+        // Get the full root objects for difficult roots
+        rootsPool = allRoots.filter(root => progressData.difficultRoots.includes(root.root));
+    } else if (languageOption === 'greek') {
+        rootsPool = [...greekRoots];
+    } else if (languageOption === 'latin') {
+        rootsPool = [...latinRoots];
+    } else {
+        rootsPool = [...allRoots];
+    }
+
+    if (rootsPool.length < groupSize) {
+        alert(`Need at least ${groupSize} roots! Selected pool has ${rootsPool.length} roots.`);
+        return;
+    }
+
+    // Always alphabetical - take first N roots
+    currentRootsStudyGroup = rootsPool.slice(0, groupSize);
+    rootsStudyIndex = 0;
+    rootsTestScore = 0;
+    rootsMissedRoots = [];
+    rootsStudyPhase = 'learn';
+
+    // Hide options, show learn phase
+    document.getElementById('rootsStudyOptions').style.display = 'none';
+    document.getElementById('rootsLearnPhase').style.display = 'block';
+
+    document.getElementById('rootsTotalFlashcards').textContent = currentRootsStudyGroup.length;
+    showRootFlashcard();
+}
+
+let isRootFlipped = false;
+
+function showRootFlashcard() {
+    const currentRoot = currentRootsStudyGroup[rootsStudyIndex];
+    isRootFlipped = false;
+
+    document.getElementById('rootsFlashcardNumber').textContent = rootsStudyIndex + 1;
+    document.getElementById('rootsFlashcardRoot').textContent = currentRoot.root;
+    document.getElementById('rootsFlashcardLanguage').textContent = currentRoot.languageFamily;
+    document.getElementById('rootsFlashcardMeaning').textContent = currentRoot.meaning;
+    document.getElementById('rootsFlashcardExamples').textContent = currentRoot.examples;
+
+    // Show front, hide back
+    document.getElementById('rootsFlashcardFront').style.display = 'block';
+    document.getElementById('rootsFlashcardBack').style.display = 'none';
+
+    // Update navigation buttons
+    document.getElementById('prevRootCardBtn').disabled = rootsStudyIndex === 0;
+
+    if (rootsStudyIndex === currentRootsStudyGroup.length - 1) {
+        document.getElementById('nextRootCardBtn').style.display = 'none';
+        document.getElementById('startRootsTestBtn').style.display = 'inline-block';
+    } else {
+        document.getElementById('nextRootCardBtn').style.display = 'inline-block';
+        document.getElementById('startRootsTestBtn').style.display = 'none';
+    }
+}
+
+function flipRootCard() {
+    isRootFlipped = !isRootFlipped;
+
+    if (isRootFlipped) {
+        document.getElementById('rootsFlashcardFront').style.display = 'none';
+        document.getElementById('rootsFlashcardBack').style.display = 'block';
+    } else {
+        document.getElementById('rootsFlashcardFront').style.display = 'block';
+        document.getElementById('rootsFlashcardBack').style.display = 'none';
+    }
+}
+
+function markCurrentRootDifficult() {
+    const currentRoot = currentRootsStudyGroup[rootsStudyIndex];
+
+    if (!progressData.difficultRoots.includes(currentRoot.root)) {
+        progressData.difficultRoots.push(currentRoot.root);
+        saveProgressData();
+        alert(`Root "${currentRoot.root}" marked as difficult!`);
+        updateProgressStats();
+    } else {
+        // Remove from difficult
+        progressData.difficultRoots = progressData.difficultRoots.filter(r => r !== currentRoot.root);
+        saveProgressData();
+        alert(`Root "${currentRoot.root}" removed from difficult roots!`);
+        updateProgressStats();
+    }
+}
+
+// Helper function to mark root as difficult without alert (for auto-marking)
+function addToDifficultRoots(root) {
+    if (!progressData.difficultRoots.includes(root)) {
+        progressData.difficultRoots.push(root);
+        saveProgressData();
+        updateProgressStats();
+    }
+}
+
+// Mark a root as difficult from browse mode
+function markRootDifficultFromBrowse(root) {
+    if (!progressData.difficultRoots.includes(root)) {
+        progressData.difficultRoots.push(root);
+        saveProgressData();
+        alert(`Root "${root}" marked as difficult!`);
+        updateProgressStats();
+    } else {
+        progressData.difficultRoots = progressData.difficultRoots.filter(r => r !== root);
+        saveProgressData();
+        alert(`Root "${root}" removed from difficult roots!`);
+        updateProgressStats();
+    }
+
+    // Update the difficult roots count
+    document.getElementById('difficultRootsCount').textContent = progressData.difficultRoots.length;
+
+    // Refresh the current view if we're browsing
+    if (currentRootsTab) {
+        showRootsTab(currentRootsTab);
+    }
+}
+
+function previousRootCard() {
+    if (rootsStudyIndex > 0) {
+        rootsStudyIndex--;
+        showRootFlashcard();
+    }
+}
+
+function nextRootCard() {
+    if (rootsStudyIndex < currentRootsStudyGroup.length - 1) {
+        rootsStudyIndex++;
+        showRootFlashcard();
+    }
+}
+
+// Roots Test Phase
+function startRootsTestPhase() {
+    rootsStudyPhase = 'test';
+    rootsStudyIndex = 0;
+    rootsTestScore = 0;
+
+    document.getElementById('rootsLearnPhase').style.display = 'none';
+    document.getElementById('rootsTestPhase').style.display = 'block';
+
+    document.getElementById('rootsTotalTestRoots').textContent = currentRootsStudyGroup.length;
+    document.getElementById('rootsTestTotal').textContent = currentRootsStudyGroup.length;
+
+    showRootsTestRoot();
+}
+
+function showRootsTestRoot() {
+    if (rootsStudyIndex >= currentRootsStudyGroup.length) {
+        showRootsResults();
+        return;
+    }
+
+    const currentRoot = currentRootsStudyGroup[rootsStudyIndex];
+
+    document.getElementById('rootsTestNumber').textContent = rootsStudyIndex + 1;
+    document.getElementById('rootsTestScore').textContent = rootsTestScore;
+    document.getElementById('rootsTestRoot').textContent = currentRoot.root;
+    document.getElementById('rootsTestLanguage').textContent = currentRoot.languageFamily;
+    document.getElementById('rootsTestFeedback').textContent = '';
+    document.getElementById('rootsTestCorrectAnswer').style.display = 'none';
+    document.getElementById('nextRootsTestBtn').style.display = 'none';
+    document.getElementById('finishRootsTestBtn').style.display = 'none';
+
+    // Generate multiple choice options
+    generateMultipleChoiceOptions(currentRoot);
+}
+
+function generateMultipleChoiceOptions(correctRoot) {
+    const multipleChoiceDiv = document.getElementById('rootsMultipleChoice');
+    multipleChoiceDiv.innerHTML = '';
+
+    // Get 3 wrong answers from other roots
+    const otherRoots = allRoots.filter(r => r.root !== correctRoot.root);
+    const shuffledOthers = [...otherRoots].sort(() => Math.random() - 0.5);
+    const wrongAnswers = shuffledOthers.slice(0, 3).map(r => r.meaning);
+
+    // Combine correct and wrong answers
+    const allOptions = [correctRoot.meaning, ...wrongAnswers];
+
+    // Shuffle the options
+    const shuffledOptions = allOptions.sort(() => Math.random() - 0.5);
+
+    // Create buttons for each option
+    shuffledOptions.forEach(meaning => {
+        const btn = document.createElement('button');
+        btn.className = 'choice-btn';
+        btn.textContent = meaning;
+        btn.onclick = () => submitRootsTestAnswer(meaning);
+        multipleChoiceDiv.appendChild(btn);
+    });
+}
+
+function submitRootsTestAnswer(selectedMeaning) {
+    const currentRoot = currentRootsStudyGroup[rootsStudyIndex];
+    const correctMeaning = currentRoot.meaning;
+
+    const feedback = document.getElementById('rootsTestFeedback');
+    const correctAnswerDiv = document.getElementById('rootsTestCorrectAnswer');
+
+    // Disable all choice buttons
+    const allButtons = document.querySelectorAll('.choice-btn');
+    allButtons.forEach(btn => {
+        btn.disabled = true;
+
+        // Highlight correct answer in green
+        if (btn.textContent === correctMeaning) {
+            btn.classList.add('correct');
+        }
+
+        // Highlight selected wrong answer in red
+        if (btn.textContent === selectedMeaning && selectedMeaning !== correctMeaning) {
+            btn.classList.add('incorrect');
+        }
+    });
+
+    const isCorrect = selectedMeaning === correctMeaning;
+
+    if (isCorrect) {
+        feedback.textContent = `✓ Correct!`;
+        feedback.className = 'correct';
+        rootsTestScore++;
+        recordRootAttempt(currentRoot.root, true);
+    } else {
+        feedback.textContent = `✗ Incorrect`;
+        feedback.className = 'incorrect';
+        recordRootAttempt(currentRoot.root, false);
+        rootsMissedRoots.push(currentRoot);
+
+        // Auto-mark incorrect roots as difficult
+        addToDifficultRoots(currentRoot.root);
+
+        // Show correct answer with examples
+        correctAnswerDiv.style.display = 'block';
+        document.getElementById('rootsCorrectMeaning').textContent = currentRoot.meaning;
+        document.getElementById('rootsCorrectExamples').textContent = currentRoot.examples;
+    }
+
+    document.getElementById('rootsTestScore').textContent = rootsTestScore;
+
+    // Show next button
+    if (rootsStudyIndex < currentRootsStudyGroup.length - 1) {
+        document.getElementById('nextRootsTestBtn').style.display = 'inline-block';
+    } else {
+        document.getElementById('finishRootsTestBtn').style.display = 'inline-block';
+    }
+}
+
+function nextRootsTestRoot() {
+    rootsStudyIndex++;
+    showRootsTestRoot();
+}
+
+function finishRootsStudy() {
+    showRootsResults();
+}
+
+function showRootsResults() {
+    document.getElementById('rootsTestPhase').style.display = 'none';
+    document.getElementById('rootsResultsPhase').style.display = 'block';
+
+    document.getElementById('rootsFinalScore').textContent = rootsTestScore;
+    document.getElementById('rootsFinalTotal').textContent = currentRootsStudyGroup.length;
+
+    const percentage = Math.round((rootsTestScore / currentRootsStudyGroup.length) * 100);
+    let message = '';
+
+    if (percentage >= 90) {
+        message = 'Excellent work! You have mastered these roots!';
+    } else if (percentage >= 70) {
+        message = 'Good job! Keep practicing to master all roots.';
+    } else {
+        message = 'Keep studying! Review the missed roots and try again.';
+    }
+
+    document.getElementById('rootsResultsMessage').textContent = message;
+}
+
+function reviewMissedRoots() {
+    if (rootsMissedRoots.length === 0) {
+        alert('No missed roots to review! Great job!');
+        return;
+    }
+
+    currentRootsStudyGroup = [...rootsMissedRoots];
+    rootsStudyIndex = 0;
+    rootsTestScore = 0;
+    rootsMissedRoots = [];
+
+    document.getElementById('rootsResultsPhase').style.display = 'none';
+    document.getElementById('rootsLearnPhase').style.display = 'block';
+
+    document.getElementById('rootsTotalFlashcards').textContent = currentRootsStudyGroup.length;
+    showRootFlashcard();
+}
+
+// Progress tracking for roots
+function recordRootAttempt(root, correct) {
+    if (!progressData.rootsStudied[root]) {
+        progressData.rootsStudied[root] = {
+            attempts: 0,
+            correct: 0,
+            lastStudied: Date.now()
+        };
+    }
+
+    progressData.rootsStudied[root].attempts++;
+    if (correct) {
+        progressData.rootsStudied[root].correct++;
+    }
+    progressData.rootsStudied[root].lastStudied = Date.now();
+
+    saveProgressData();
 }
 
 // Progress Tracking
@@ -633,6 +1072,14 @@ function loadProgressData() {
     const saved = localStorage.getItem('wordsOfChampionsProgress');
     if (saved) {
         progressData = JSON.parse(saved);
+
+        // Ensure backwards compatibility - initialize new fields if missing
+        if (!progressData.rootsStudied) {
+            progressData.rootsStudied = {};
+        }
+        if (!progressData.difficultRoots) {
+            progressData.difficultRoots = [];
+        }
     }
 }
 
