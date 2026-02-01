@@ -17,6 +17,7 @@ let isFlipped = false;
 let testIndex = 0;
 let testScore = 0;
 let missedWords = [];
+let studyOffset = 0; // Track position in filtered words for sequential study groups
 
 // Progress Data (stored in localStorage)
 let progressData = {
@@ -77,6 +78,9 @@ function updateFilters() {
         return wordListFilter === 'all' || word.wordList === wordListFilter;
     });
 
+    // Reset study offset when filters change
+    studyOffset = 0;
+
     // Update filter info
     const filterInfo = document.getElementById('filterInfo');
     const wordListName = wordListFilter === 'all' ? 'All Words' : getWordListName(wordListFilter);
@@ -129,6 +133,9 @@ function selectMode(mode) {
 
 function exitMode() {
     currentMode = null;
+
+    // Reset study offset when exiting any mode
+    studyOffset = 0;
 
     // Hide all mode interfaces
     document.getElementById('wordCard').style.display = 'none';
@@ -445,6 +452,7 @@ function showGroupSizeSelection() {
 
 function setGroupSize(size) {
     studyGroupSize = size;
+    studyOffset = 0; // Reset to start from beginning when selecting group size
     document.getElementById('groupSizeSelection').style.display = 'none';
     startStudyMode();
 }
@@ -458,7 +466,21 @@ function startStudyMode() {
 
     // Select words alphabetically for study group
     const alphabetical = [...filteredWords].sort((a, b) => a.word.localeCompare(b.word));
-    studyGroup = alphabetical.slice(0, studyGroupSize);
+
+    // Check if we've reached the end of the word list
+    if (studyOffset >= alphabetical.length) {
+        alert('🎉 You\'ve completed all words! Starting over from the beginning.');
+        studyOffset = 0;
+    }
+
+    // Get next group of words starting from current offset
+    studyGroup = alphabetical.slice(studyOffset, studyOffset + studyGroupSize);
+
+    // If we don't have enough words left, take what's available
+    if (studyGroup.length < studyGroupSize && studyGroup.length > 0) {
+        const remaining = studyGroupSize - studyGroup.length;
+        alert(`Only ${studyGroup.length} words remaining in this section. Starting with those!`);
+    }
 
     flashcardIndex = 0;
     testIndex = 0;
@@ -660,6 +682,8 @@ function reviewMissed() {
 }
 
 function startNextGroup() {
+    // Move to next group of words
+    studyOffset += studyGroupSize;
     startStudyMode();
 }
 
